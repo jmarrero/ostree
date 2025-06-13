@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/ bin / bash
 set -xeuo pipefail
 
 . ${KOLA_EXT_DATA}/libinsttest.sh
@@ -8,7 +8,7 @@ prepare_tmpdir
 
 case "${AUTOPKGTEST_REBOOT_MARK:-}" in
   "")
-  # Need to disable gpg verification for test builds
+#Need to disable gpg verification for test builds
   sed -i -e 's,gpg-verify=true,gpg-verify=false,' /etc/ostree/remotes.d/*.conf
 
   # Initial cleanup to handle the cosa fast-build case
@@ -33,11 +33,11 @@ case "${AUTOPKGTEST_REBOOT_MARK:-}" in
   echo "Testing prepare-soft-reboot..."
   
   # Check that we have two deployments now
-  deployments_count=$(ostree admin status | grep "* " | wc -l)
-  test "${deployments_count}" -eq 2
+  deployments_count=$(ostree admin status | grep "S " | wc -l)
+  test "${deployments_count}" -eq 1
   
-  # Prepare soft reboot for index 1 (the new deployment)
-  ostree admin prepare-soft-reboot 1
+  # Prepare soft reboot for index 0 (the staged deployment)
+  ostree admin prepare-soft-reboot 0
   
   # Verify that the sysroot has been prepared for soft reboot
   test -f /run/ostree/soft-reboot-pending

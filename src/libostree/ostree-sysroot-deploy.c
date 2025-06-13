@@ -4287,13 +4287,15 @@ ostree_sysroot_deployment_prepare_next_root (OstreeSysroot *self, OstreeDeployme
     {
       const char *booted_bootcsum = ostree_deployment_get_bootcsum (booted_deployment);
       const char *target_bootcsum = ostree_deployment_get_bootcsum (deployment);
-      
+
       if (booted_bootcsum && target_bootcsum && !g_str_equal (booted_bootcsum, target_bootcsum))
         {
-          return glnx_throw (error, "Cannot soft-reboot to deployment with different kernel "
-                                   "(bootcsum %s != %s). This is the default security policy to prevent "
-                                   "kernel module mismatches. To override, bind mount the old kernel directory.",
-                            target_bootcsum, booted_bootcsum);
+          return glnx_throw (
+              error,
+              "Cannot soft-reboot to deployment with different kernel "
+              "(bootcsum %s != %s). This is the default security policy to prevent "
+              "kernel module mismatches. To override, bind mount the old kernel directory.",
+              target_bootcsum, booted_bootcsum);
         }
     }
 
