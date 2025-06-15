@@ -46,8 +46,6 @@ ot_admin_builtin_prepare_soft_reboot (int argc, char **argv, OstreeCommandInvoca
       return FALSE;
     }
 
-  g_autoptr (GPtrArray) current_deployments = ostree_sysroot_get_deployments (sysroot);
-
   const char *deploy_index_str = argv[1];
   guint deploy_index;
   {
