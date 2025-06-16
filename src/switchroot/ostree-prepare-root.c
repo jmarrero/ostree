@@ -275,9 +275,18 @@ main (int argc, char *argv[])
   if (!g_option_context_parse (context, &argc, &argv, &error))
     errx (EXIT_FAILURE, "Error parsing options: %s", error->message);
 
-  if (argc < 2)
-    err (EXIT_FAILURE, "usage: ostree-prepare-root [--soft-reboot] SYSROOT");
-  const char *root_arg = argv[1];
+  const char *root_arg = NULL;
+  if (opt_soft_reboot)
+    {
+      // In soft-reboot mode, sysroot is always /sysroot
+      root_arg = "/sysroot";
+    }
+  else
+    {
+      if (argc < 2)
+        err (EXIT_FAILURE, "usage: ostree-prepare-root [--soft-reboot] SYSROOT");
+      root_arg = argv[1];
+    }
 
   /* Check if we're in initramfs or not */
   if (fstatat (AT_FDCWD, OTCORE_RUN_BOOTED, &stbuf, 0) == 0)

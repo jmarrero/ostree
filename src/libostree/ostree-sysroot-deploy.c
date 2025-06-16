@@ -4305,10 +4305,9 @@ ostree_sysroot_deployment_prepare_next_root (OstreeSysroot *self, OstreeDeployme
   glnx_autofd int deployment_dfd = -1;
   if (!glnx_opendirat (self->sysroot_fd, deployment_path, FALSE, &deployment_dfd, error))
     return FALSE;
-  // TODO remove all this logic to get /sysroot path is going to be always /sysroot.
-  g_autofree char *sysroot_path = g_file_get_path (ostree_sysroot_get_path (self));
+
   const char *argv[]
-      = { "/usr/lib/ostree/ostree-prepare-root", "--soft-reboot", sysroot_path, NULL };
+      = { "/usr/lib/ostree/ostree-prepare-root", "--soft-reboot", NULL };
 
   if (!g_spawn_sync (NULL, (char **)argv, NULL, 0, &_ostree_sysroot_child_setup_fchdir,
                      (gpointer)(uintptr_t)deployment_dfd, NULL, NULL, &estatus, error))
