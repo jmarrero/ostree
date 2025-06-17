@@ -71,16 +71,5 @@ ot_admin_builtin_prepare_soft_reboot (int argc, char **argv, OstreeCommandInvoca
   if (!ostree_sysroot_deployment_prepare_next_root (sysroot, target_deployment, cancellable, error))
     return FALSE;
 
-  // Create soft-reboot-pending file to track prepared deployment
-  g_autofree char *deployment_info
-      = g_strdup_printf ("%s.%d", ostree_deployment_get_csum (target_deployment),
-                         ostree_deployment_get_deployserial (target_deployment));
-
-  if (g_mkdir_with_parents ("/run/ostree", 0755) < 0 && errno != EEXIST)
-    return glnx_throw_errno_prefix (error, "Failed to create /run/ostree");
-
-  if (!g_file_set_contents ("/run/ostree/soft-reboot-pending", deployment_info, -1, error))
-    return FALSE;
-
   return TRUE;
 }

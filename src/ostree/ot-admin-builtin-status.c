@@ -45,23 +45,26 @@ static GOptionEntry options[]
 static gboolean
 deployment_is_prepared_for_soft_reboot (OstreeDeployment *deployment)
 {
-  g_autofree char *soft_reboot_pending = NULL;
+  // Check if /run/nextroot exists (indicating a soft-reboot is prepared)
+  if (!g_file_test ("/run/nextroot", G_FILE_TEST_IS_DIR))
+    return FALSE;
 
-  // Check both possible locations for the soft-reboot-pending file
-  if (!g_file_get_contents ("/run/ostree/soft-reboot-pending", &soft_reboot_pending, NULL, NULL))
-    {
-      // Try from nextroot if we're in that context
-      if (!g_file_get_contents ("/run/nextroot/run/ostree/soft-reboot-pending",
-                                &soft_reboot_pending, NULL, NULL))
-        return FALSE;
-    }
+  // Get the deployment info we're looking for
+  const char *deployment_csum = ostree_deployment_get_csum (deployment);
+  int deployment_serial = ostree_deployment_get_deployserial (deployment);
+  const char *deployment_osname = ostree_deployment_get_osname (deployment);
 
-  g_autofree char *deployment_info
-      = g_strdup_printf ("%s.%d", ostree_deployment_get_csum (deployment),
-                         ostree_deployment_get_deployserial (deployment));
+  // Try to find this deployment under /run/nextroot/sysroot/ostree/deploy
+  g_autofree char *nextroot_deploy_path = g_strdup_printf ("/run/nextroot/sysroot/ostree/deploy/%s/deploy", deployment_osname);
+  
+  if (!g_file_test (nextroot_deploy_path, G_FILE_TEST_IS_DIR))
+    return FALSE;
 
-  g_strstrip (soft_reboot_pending);
-  return g_strcmp0 (soft_reboot_pending, deployment_info) == 0;
+  // Look for a directory matching our deployment
+  g_autofree char *target_deploy_name = g_strdup_printf ("%s.%d", deployment_csum, deployment_serial);
+  g_autofree char *target_deploy_path = g_build_filename (nextroot_deploy_path, target_deploy_name, NULL);
+  
+  return g_file_test (target_deploy_path, G_FILE_TEST_IS_DIR);
 }
 
 static gboolean
