@@ -55,15 +55,18 @@ deployment_is_prepared_for_soft_reboot (OstreeDeployment *deployment)
   const char *deployment_osname = ostree_deployment_get_osname (deployment);
 
   // Try to find this deployment under /run/nextroot/sysroot/ostree/deploy
-  g_autofree char *nextroot_deploy_path = g_strdup_printf ("/run/nextroot/sysroot/ostree/deploy/%s/deploy", deployment_osname);
-  
+  g_autofree char *nextroot_deploy_path
+      = g_strdup_printf ("/run/nextroot/sysroot/ostree/deploy/%s/deploy", deployment_osname);
+
   if (!g_file_test (nextroot_deploy_path, G_FILE_TEST_IS_DIR))
     return FALSE;
 
   // Look for a directory matching our deployment
-  g_autofree char *target_deploy_name = g_strdup_printf ("%s.%d", deployment_csum, deployment_serial);
-  g_autofree char *target_deploy_path = g_build_filename (nextroot_deploy_path, target_deploy_name, NULL);
-  
+  g_autofree char *target_deploy_name
+      = g_strdup_printf ("%s.%d", deployment_csum, deployment_serial);
+  g_autofree char *target_deploy_path
+      = g_build_filename (nextroot_deploy_path, target_deploy_name, NULL);
+
   return g_file_test (target_deploy_path, G_FILE_TEST_IS_DIR);
 }
 
@@ -103,7 +106,7 @@ deployment_print_status (OstreeSysroot *sysroot, OstreeRepo *repo, OstreeDeploym
   g_autofree char *origin_refspec
       = origin ? g_key_file_get_string (origin, "origin", "refspec", NULL) : NULL;
 
-  g_autoptr(GString) deployment_status = g_string_new ("");
+  g_autoptr (GString) deployment_status = g_string_new ("");
   gboolean is_soft_reboot_prepared = deployment_is_prepared_for_soft_reboot (deployment);
 
   if (ostree_deployment_is_finalization_locked (deployment))

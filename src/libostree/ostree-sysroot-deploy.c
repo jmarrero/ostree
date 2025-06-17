@@ -4261,6 +4261,24 @@ ostree_sysroot_deployment_set_mutable (OstreeSysroot *self, OstreeDeployment *de
   return TRUE;
 }
 
+struct PrepareRootChildSetupContext
+{
+  int deployment_dfd;
+  int rootns_fd;
+};
+
+static inline void
+prepare_root_child_setup (gpointer data)
+{
+  struct PrepareRootChildSetupContext *ctx = data;
+  int rc = fchdir (ctx->deployment_dfd);
+  if (rc < 0)
+    exit (1);
+  rc = setns (ctx->rootns_fd, CLONE_NEWNS);
+  if (rc < 0)
+    exit (1);
+}
+
 /**
  * ostree_sysroot_deployment_prepare_next_root
  * @self: Sysroot
@@ -4306,11 +4324,19 @@ ostree_sysroot_deployment_prepare_next_root (OstreeSysroot *self, OstreeDeployme
   if (!glnx_opendirat (self->sysroot_fd, deployment_path, FALSE, &deployment_dfd, error))
     return FALSE;
 
-  const char *argv[]
-      = { "/usr/lib/ostree/ostree-prepare-root", "--soft-reboot", NULL };
+  const char *argv[] = { "/usr/lib/ostree/ostree-prepare-root", "--soft-reboot", NULL };
 
-  if (!g_spawn_sync (NULL, (char **)argv, NULL, 0, &_ostree_sysroot_child_setup_fchdir,
-                     (gpointer)(uintptr_t)deployment_dfd, NULL, NULL, &estatus, error))
+  glnx_autofd int rootns_fd = -1;
+  if (!glnx_openat_rdonly (AT_FDCWD, "/proc/1/ns/mnt", TRUE, &rootns_fd, error))
+    return FALSE;
+
+  struct PrepareRootChildSetupContext ctx = {
+    .deployment_dfd = deployment_dfd,
+    .rootns_fd = rootns_fd,
+  };
+
+  if (!g_spawn_sync (NULL, (char **)argv, NULL, 0, &_ostree_sysroot_child_setup_fchdir, &ctx, NULL,
+                     NULL, &estatus, error))
     return FALSE;
 
   if (!g_spawn_check_exit_status (estatus, error))

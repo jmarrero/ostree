@@ -1143,8 +1143,8 @@ _ostree_sysroot_reload_staged (OstreeSysroot *self, GError **error)
   if (!self->booted_deployment)
     {
       /* Check if we're in a soft-reboot scenario */
-      if (!(g_file_test ("/run/nextroot", G_FILE_TEST_IS_DIR) &&
-            g_file_test ("/run/nextroot/sysroot", G_FILE_TEST_IS_DIR)))
+      if (!(g_file_test ("/run/nextroot", G_FILE_TEST_IS_DIR)
+            && g_file_test ("/run/nextroot/sysroot", G_FILE_TEST_IS_DIR)))
         {
           g_assert (self->booted_deployment);
         }
@@ -1244,8 +1244,9 @@ sysroot_load_from_bootloader_configs (OstreeSysroot *self, GCancellable *cancell
     {
       /* Check if we're in a soft-reboot scenario where the current deployment
        * may not have a bootloader entry */
-      gboolean is_soft_reboot_pending = g_file_test ("/run/nextroot", G_FILE_TEST_IS_DIR) &&
-                                         g_file_test ("/run/nextroot/sysroot", G_FILE_TEST_IS_DIR);
+      gboolean is_soft_reboot_pending
+          = g_file_test ("/run/nextroot", G_FILE_TEST_IS_DIR)
+            && g_file_test ("/run/nextroot/sysroot", G_FILE_TEST_IS_DIR);
 
       if (!is_soft_reboot_pending)
         {
@@ -1260,7 +1261,8 @@ sysroot_load_from_bootloader_configs (OstreeSysroot *self, GCancellable *cancell
           else
             {
               return glnx_throw (
-                  error, "Unexpected state: %s found and in / sysroot, but bootloader entry not found",
+                  error,
+                  "Unexpected state: %s found and in / sysroot, but bootloader entry not found",
                   OSTREE_PATH_BOOTED);
             }
         }
