@@ -4273,10 +4273,10 @@ prepare_root_child_setup (gpointer data)
   struct PrepareRootChildSetupContext *ctx = data;
   int rc = fchdir (ctx->deployment_dfd);
   if (rc < 0)
-    exit (1);
+    err (1, "fchdir");
   rc = setns (ctx->rootns_fd, CLONE_NEWNS);
   if (rc < 0)
-    exit (1);
+    err (1, "setns");
 }
 
 /**
@@ -4335,7 +4335,7 @@ ostree_sysroot_deployment_prepare_next_root (OstreeSysroot *self, OstreeDeployme
     .rootns_fd = rootns_fd,
   };
 
-  if (!g_spawn_sync (NULL, (char **)argv, NULL, 0, &_ostree_sysroot_child_setup_fchdir, &ctx, NULL,
+  if (!g_spawn_sync (NULL, (char **)argv, NULL, 0, prepare_root_child_setup, &ctx, NULL,
                      NULL, &estatus, error))
     return FALSE;
 
