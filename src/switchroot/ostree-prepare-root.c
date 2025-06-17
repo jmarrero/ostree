@@ -533,6 +533,8 @@ main (int argc, char *argv[])
           cfs_options.flags |= LCFS_MOUNT_FLAGS_REQUIRE_VERITY;
         }
 
+      system ("ls -al");
+
       if (lcfs_mount_image (OSTREE_COMPOSEFS_NAME, TMP_SYSROOT, &cfs_options) == 0)
         {
           using_composefs = true;
