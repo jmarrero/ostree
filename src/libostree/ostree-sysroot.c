@@ -1137,7 +1137,18 @@ _ostree_sysroot_reload_staged (OstreeSysroot *self, GError **error)
   if (!self->root_is_ostree_booted)
     return TRUE; /* Note early return */
 
-  g_assert (self->booted_deployment);
+  /* In normal cases, we should have a booted deployment. However, during
+   * soft-reboot scenarios, the current deployment may not correspond to
+   * any bootloader entry, so booted_deployment could be NULL. */
+  if (!self->booted_deployment)
+    {
+      /* Check if we're in a soft-reboot scenario */
+      if (!(g_file_test ("/run/ostree/soft-reboot-pending", G_FILE_TEST_EXISTS) ||
+            g_file_test ("/run/nextroot/run/ostree/soft-reboot-pending", G_FILE_TEST_EXISTS)))
+        {
+          g_assert (self->booted_deployment);
+        }
+    }
 
   g_clear_object (&self->staged_deployment);
   g_clear_pointer (&self->staged_deployment_data, g_variant_unref);
@@ -1231,19 +1242,31 @@ sysroot_load_from_bootloader_configs (OstreeSysroot *self, GCancellable *cancell
 
   if (self->root_is_ostree_booted && !self->booted_deployment)
     {
-      if (!glnx_fstatat_allow_noent (self->sysroot_fd, "boot/loader", NULL, AT_SYMLINK_NOFOLLOW,
-                                     error))
-        return FALSE;
-      if (errno == ENOENT)
+      /* Check if we're in a soft-reboot scenario where the current deployment
+       * may not have a bootloader entry */
+      gboolean is_soft_reboot_pending = FALSE;
+      if (g_file_test ("/run/ostree/soft-reboot-pending", G_FILE_TEST_EXISTS) ||
+          g_file_test ("/run/nextroot/run/ostree/soft-reboot-pending", G_FILE_TEST_EXISTS))
         {
-          return glnx_throw (error, "Unexpected state: %s found, but no /boot/loader directory",
-                             OSTREE_PATH_BOOTED);
+          is_soft_reboot_pending = TRUE;
         }
-      else
+
+      if (!is_soft_reboot_pending)
         {
-          return glnx_throw (
-              error, "Unexpected state: %s found and in / sysroot, but bootloader entry not found",
-              OSTREE_PATH_BOOTED);
+          if (!glnx_fstatat_allow_noent (self->sysroot_fd, "boot/loader", NULL, AT_SYMLINK_NOFOLLOW,
+                                         error))
+            return FALSE;
+          if (errno == ENOENT)
+            {
+              return glnx_throw (error, "Unexpected state: %s found, but no /boot/loader directory",
+                                 OSTREE_PATH_BOOTED);
+            }
+          else
+            {
+              return glnx_throw (
+                  error, "Unexpected state: %s found and in / sysroot, but bootloader entry not found",
+                  OSTREE_PATH_BOOTED);
+            }
         }
     }
 
