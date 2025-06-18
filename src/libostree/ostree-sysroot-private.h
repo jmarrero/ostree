@@ -151,6 +151,8 @@ gboolean _ostree_sysroot_finalize_staged (OstreeSysroot *self, GCancellable *can
 gboolean _ostree_sysroot_boot_complete (OstreeSysroot *self, GCancellable *cancellable,
                                         GError **error);
 
+gboolean _ostree_prepare_soft_reboot (GError **error);
+
 OstreeDeployment *_ostree_sysroot_deserialize_deployment_from_variant (GVariant *v, GError **error);
 
 char *_ostree_sysroot_get_deployment_backing_relpath (OstreeDeployment *deployment);
@@ -190,5 +192,14 @@ gboolean _ostree_sysroot_list_all_boot_directories (OstreeSysroot *self, char **
 gboolean _ostree_sysroot_parse_bootlink (const char *bootlink, int *out_entry_bootversion,
                                          char **out_osname, char **out_bootcsum,
                                          int *out_treebootserial, GError **error);
+
+static inline void
+_ostree_sysroot_child_setup_fchdir (gpointer data)
+{
+  int fd = (int)(uintptr_t)data;
+  int rc __attribute__ ((unused));
+
+  rc = fchdir (fd);
+}
 
 G_END_DECLS
