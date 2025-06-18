@@ -706,8 +706,20 @@ main (int argc, char *argv[])
   if (sysroot_readonly)
     {
       /* Bind-mount /var (at stateroot path), and remount as writable. */
-      g_autofree char *var_source_allocated = opt_soft_reboot ? g_build_filename (sysroot_path, "var", NULL) : NULL;
-      const char *var_source = opt_soft_reboot ? var_source_allocated : "../../var";
+      g_autofree char *var_source_allocated = NULL;
+      const char *var_source;
+      if (opt_soft_reboot)
+        {
+          // In soft-reboot mode, resolve ../../var to absolute path
+          var_source_allocated = realpath ("../../var", NULL);
+          if (!var_source_allocated)
+            err (EXIT_FAILURE, "realpath(../../var) failed");
+          var_source = var_source_allocated;
+        }
+      else
+        {
+          var_source = "../../var";
+        }
       if (mount (var_source, var_source, NULL, MS_BIND | MS_SILENT, NULL) < 0)
         err (EXIT_FAILURE, "failed to prepare /var bind-mount at %s", var_source);
       if (mount (var_source, var_source, NULL, MS_BIND | MS_REMOUNT | MS_SILENT, NULL) < 0)
@@ -731,8 +743,20 @@ main (int argc, char *argv[])
    */
   if (mount_var)
     {
-      g_autofree char *var_src_allocated = opt_soft_reboot ? g_build_filename (sysroot_path, "var", NULL) : NULL;
-      const char *var_src = opt_soft_reboot ? var_src_allocated : "../../var";
+      g_autofree char *var_src_allocated = NULL;
+      const char *var_src;
+      if (opt_soft_reboot)
+        {
+          // In soft-reboot mode, resolve ../../var to absolute path
+          var_src_allocated = realpath ("../../var", NULL);
+          if (!var_src_allocated)
+            err (EXIT_FAILURE, "realpath(../../var) failed");
+          var_src = var_src_allocated;
+        }
+      else
+        {
+          var_src = "../../var";
+        }
       if (mount (var_src, TMP_SYSROOT "/var", NULL, MS_BIND | MS_SILENT, NULL) < 0)
         err (EXIT_FAILURE, "failed to bind mount %s to var", var_src);
 
