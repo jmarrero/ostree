@@ -2,15 +2,15 @@
 osid := `. /usr/lib/os-release && echo $ID`
 
 # Build the container image from current sources
-build:
-    podman build --jobs=4 -t localhost/ostree .
+build *ARGS:
+    podman build --jobs=4 -t localhost/ostree {{ARGS}} .
 
-build-unittest:
-    podman build --jobs=4 --target build -t localhost/ostree-buildroot .
+build-unittest *ARGS:
+    podman build --jobs=4 --target build -t localhost/ostree-buildroot {{ARGS}} .
 
 # Do a build but don't regenerate the initramfs
-build-noinitramfs:
-    podman build --jobs=4 --target rootfs -t localhost/ostree .
+build-noinitramfs *ARGS:
+    podman build --jobs=4 --target rootfs -t localhost/ostree {{ARGS}} .
 
 # We need a filesystem that supports O_TMPFILE right now (i.e. not overlayfs)
 # or ostree hard crashes in the http code =/
@@ -42,3 +42,10 @@ unitcontainer: unitcontainer-build
 # Run a build on the host system
 build-host:
     . ci/libbuild.sh && build
+
+# Run a build on the host system and "install" into target/inst
+# This directory tree can then be copied elsewhere
+build-host-inst: build-host
+    make -C target/c install DESTDIR=$(pwd)/target/inst
+    tar --sort=name --numeric-owner --owner=0 --group=0 -C target/inst -czf target/inst.tar.gz .
+
