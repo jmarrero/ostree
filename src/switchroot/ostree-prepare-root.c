@@ -646,8 +646,23 @@ main (int argc, char *argv[])
       else
         {
           /* Bind-mount /etc (at deploy path), and remount as writable. */
-          if (mount ("etc", tmp_sysroot_etc, NULL, MS_BIND | MS_SILENT, NULL) < 0)
-            err (EXIT_FAILURE, "failed to prepare /etc bind-mount at /sysroot.tmp/etc");
+          g_autofree char *etc_source_allocated = NULL;
+          const char *etc_source;
+
+          if (opt_soft_reboot)
+            {
+              // In soft-reboot mode, use the current running system's /etc
+              etc_source = "/etc";
+            }
+          else
+            {
+
+              etc_source = using_composefs ? TMP_SYSROOT "/etc" : "etc";
+            }
+          if (mount (etc_source, tmp_sysroot_etc, NULL, MS_BIND | MS_SILENT, NULL) < 0)
+            {
+              err (EXIT_FAILURE, "failed to prepare /etc bind-mount at /sysroot.tmp/etc");
+            }
           if (mount (tmp_sysroot_etc, tmp_sysroot_etc, NULL, MS_BIND | MS_REMOUNT | MS_SILENT, NULL)
               < 0)
             err (EXIT_FAILURE, "failed to make writable /etc bind-mount at /sysroot.tmp/etc");
@@ -690,7 +705,7 @@ main (int argc, char *argv[])
   /* Prepare /var.
    * When a read-only sysroot is configured, this adds a dedicated bind-mount (to itself)
    * so that the stateroot location stays writable. */
-  if (sysroot_readonly)
+  if (sysroot_readonly && !(opt_soft_reboot))
     {
       /* Bind-mount /var (at stateroot path), and remount as writable. */
       if (mount ("../../var", "../../var", NULL, MS_BIND | MS_SILENT, NULL) < 0)
