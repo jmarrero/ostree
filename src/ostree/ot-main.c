@@ -316,6 +316,7 @@ ostree_run (int argc, char **argv, OstreeCommand *commands, GError **res_error)
   g_set_prgname (prgname);
 #endif
   OstreeCommandInvocation invocation = { .command = command };
+
   if (!command->fn (argc, argv, &invocation, cancellable, &error))
     goto out;
 
