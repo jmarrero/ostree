@@ -623,6 +623,10 @@ main (int argc, char *argv[])
       if (!ot_keyfile_get_boolean_with_default (config, ETC_KEY, TRANSIENT_KEY, FALSE,
                                                 &etc_transient, &error))
         errx (EXIT_FAILURE, "Failed to parse etc.transient value: %s", error->message);
+      
+      /* Force transient etc when using composefs in soft-reboot mode, since composefs /etc is read-only */
+      if (opt_soft_reboot && using_composefs)
+        etc_transient = TRUE;
 
       static const char *tmp_sysroot_etc = TMP_SYSROOT "/etc";
       if (etc_transient)
