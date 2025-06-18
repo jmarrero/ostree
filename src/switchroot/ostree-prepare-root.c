@@ -438,8 +438,10 @@ main (int argc, char *argv[])
     struct statfs stfsbuf;
     if (statfs (".", &stfsbuf) < 0)
       err (EXIT_FAILURE, "fstatfs(deployment dir)");
-    // Should not already be on a composefs
-    g_assert_cmpuint (stfsbuf.f_type, !=, OVERLAYFS_SUPER_MAGIC);
+    // Should not already be on a composefs, except in soft-reboot mode where we may
+    // legitimately be running from an overlayfs to access the real deployment underneath
+    if (!opt_soft_reboot)
+      g_assert_cmpuint (stfsbuf.f_type, !=, OVERLAYFS_SUPER_MAGIC);
   }
   fprintf (stderr, "dev=%" PRIu64 " ino=%" PRIu64, (uint64_t)stbuf.st_dev, (uint64_t)stbuf.st_ino);
   g_variant_builder_add (&metadata_builder, "{sv}", OTCORE_RUN_BOOTED_KEY_BACKING_ROOTDEVINO,
@@ -656,7 +658,8 @@ main (int argc, char *argv[])
       else
         {
           /* Bind-mount /etc (at deploy path), and remount as writable. */
-          if (mount ("etc", tmp_sysroot_etc, NULL, MS_BIND | MS_SILENT, NULL) < 0)
+          const char *etc_source = using_composefs ? TMP_SYSROOT "/etc" : "etc";
+          if (mount (etc_source, tmp_sysroot_etc, NULL, MS_BIND | MS_SILENT, NULL) < 0)
             err (EXIT_FAILURE, "failed to prepare /etc bind-mount at /sysroot.tmp/etc");
           if (mount (tmp_sysroot_etc, tmp_sysroot_etc, NULL, MS_BIND | MS_REMOUNT | MS_SILENT, NULL)
               < 0)

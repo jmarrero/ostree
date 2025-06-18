@@ -4271,12 +4271,14 @@ static inline void
 prepare_root_child_setup (gpointer data)
 {
   struct PrepareRootChildSetupContext *ctx = data;
-  int rc = fchdir (ctx->deployment_dfd);
-  if (rc < 0)
-    err (1, "fchdir");
-  rc = setns (ctx->rootns_fd, CLONE_NEWNS);
+  // Enter the root namespace first to escape the overlayfs context
+  int rc = setns (ctx->rootns_fd, CLONE_NEWNS);
   if (rc < 0)
     err (1, "setns");
+  // Then change to the deployment directory in the root namespace
+  rc = fchdir (ctx->deployment_dfd);
+  if (rc < 0)
+    err (1, "fchdir");
 }
 
 /**
@@ -4321,7 +4323,14 @@ ostree_sysroot_deployment_prepare_next_root (OstreeSysroot *self, OstreeDeployme
   gint estatus;
 
   glnx_autofd int deployment_dfd = -1;
-  if (!glnx_opendirat (self->sysroot_fd, deployment_path, FALSE, &deployment_dfd, error))
+  // For soft-reboot, we need to access the real deployment directory, not through overlayfs
+  // Open the deployment directory from the real sysroot path
+  g_autofree char *real_sysroot_path = realpath (gs_file_get_path_cached (self->path), NULL);
+  if (!real_sysroot_path)
+    return glnx_throw_errno_prefix (error, "realpath(sysroot)");
+  
+  g_autofree char *real_deployment_path = g_build_filename (real_sysroot_path, deployment_path, NULL);
+  if (!glnx_opendirat (AT_FDCWD, real_deployment_path, FALSE, &deployment_dfd, error))
     return FALSE;
 
   const char *argv[] = { "/usr/lib/ostree/ostree-prepare-root", "--soft-reboot", NULL };
