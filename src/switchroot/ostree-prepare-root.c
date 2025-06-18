@@ -623,10 +623,6 @@ main (int argc, char *argv[])
       if (!ot_keyfile_get_boolean_with_default (config, ETC_KEY, TRANSIENT_KEY, FALSE,
                                                 &etc_transient, &error))
         errx (EXIT_FAILURE, "Failed to parse etc.transient value: %s", error->message);
-      
-      /* Force transient etc when using composefs in soft-reboot mode, since composefs /etc is read-only */
-      if (opt_soft_reboot && using_composefs)
-        etc_transient = TRUE;
 
       static const char *tmp_sysroot_etc = TMP_SYSROOT "/etc";
       if (etc_transient)
@@ -662,7 +658,18 @@ main (int argc, char *argv[])
       else
         {
           /* Bind-mount /etc (at deploy path), and remount as writable. */
-          const char *etc_source = using_composefs ? TMP_SYSROOT "/etc" : "etc";
+          g_autofree char *etc_source_allocated = NULL;
+          const char *etc_source;
+          if (opt_soft_reboot)
+            {
+              // In soft-reboot mode, use the current running system's /etc
+              etc_source = "/etc";
+            }
+          else
+            {
+              etc_source = using_composefs ? TMP_SYSROOT "/etc" : "etc";
+            }
+          
           if (mount (etc_source, tmp_sysroot_etc, NULL, MS_BIND | MS_SILENT, NULL) < 0)
             err (EXIT_FAILURE, "failed to prepare /etc bind-mount at /sysroot.tmp/etc");
           if (mount (tmp_sysroot_etc, tmp_sysroot_etc, NULL, MS_BIND | MS_REMOUNT | MS_SILENT, NULL)
