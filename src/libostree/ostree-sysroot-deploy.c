@@ -19,6 +19,7 @@
 
 #include "config.h"
 
+#include <errno.h>
 #include <err.h>
 #include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
@@ -4099,10 +4100,80 @@ _ostree_sysroot_boot_complete (OstreeSysroot *self, GCancellable *cancellable, G
   if (!ot_openat_ignore_enoent (self->boot_fd, _OSTREE_FINALIZE_STAGED_FAILURE_PATH, &failure_fd,
                                 error))
     return FALSE;
-  // If we didn't find a failure log, then there's nothing to do right now.
-  // (Actually this unit shouldn't even be invoked, but we may do more in the future)
+  // If we didn't find a failure log, check for soft-reboot completion tasks
   if (failure_fd == -1)
-    return TRUE;
+    {
+      // Check if we just completed a soft-reboot and need to update /run/ostree-booted
+      // We should clean up soft-reboot state whether or not /run/nextroot still exists
+      if (g_file_test ("/run/ostree/nextroot-deployment", G_FILE_TEST_EXISTS))
+        {
+          // We're completing a soft-reboot, update /run/ostree-booted to reflect the new deployment
+          g_autofree char *target_deployment_path = g_file_read_link ("/run/ostree/nextroot-deployment", NULL);
+          if (target_deployment_path)
+            {
+              // Load the sysroot to get deployment information
+              if (!ostree_sysroot_load (self, cancellable, error))
+                return FALSE;
+              
+              // Find the deployment that matches the symlink target
+              g_autoptr (GPtrArray) deployments = ostree_sysroot_get_deployments (self);
+              OstreeDeployment *target_deployment = NULL;
+              
+              for (guint i = 0; i < deployments->len; i++)
+                {
+                  OstreeDeployment *deployment = deployments->pdata[i];
+                  g_autofree char *deployment_path = ostree_sysroot_get_deployment_dirpath (self, deployment);
+                  g_autofree char *full_deployment_path = g_build_filename (gs_file_get_path_cached (self->path), deployment_path, NULL);
+                  
+                  if (g_str_equal (target_deployment_path, full_deployment_path))
+                    {
+                      target_deployment = deployment;
+                      break;
+                    }
+                }
+              
+              if (target_deployment)
+                {
+                  // Create the updated /run/ostree-booted metadata for the soft-reboot target
+                  g_autofree char *deployment_path = ostree_sysroot_get_deployment_dirpath (self, target_deployment);
+                  glnx_autofd int deployment_dfd = -1;
+                  if (!glnx_opendirat (self->sysroot_fd, deployment_path, FALSE, &deployment_dfd, error))
+                    return FALSE;
+                  
+                  struct stat deployment_stbuf;
+                  if (!glnx_fstat (deployment_dfd, &deployment_stbuf, error))
+                    return FALSE;
+                  
+                  // Build the new metadata
+                  GVariantBuilder metadata_builder;
+                  g_variant_builder_init (&metadata_builder, G_VARIANT_TYPE ("a{sv}"));
+                  
+                  g_variant_builder_add (&metadata_builder, "{sv}", OTCORE_RUN_BOOTED_KEY_BACKING_ROOTDEVINO,
+                                         g_variant_new ("(tt)", (guint64)deployment_stbuf.st_dev, (guint64)deployment_stbuf.st_ino));
+                  
+                  // TODO: Add other metadata as needed (composefs, sysroot_ro, etc.)
+                  
+                  g_autoptr (GVariant) metadata = g_variant_ref_sink (g_variant_builder_end (&metadata_builder));
+                  const guint8 *buf = g_variant_get_data (metadata) ?: (guint8 *)"";
+                  if (!glnx_file_replace_contents_at (AT_FDCWD, OTCORE_RUN_BOOTED, buf,
+                                                      g_variant_get_size (metadata), 0, NULL, error))
+                    return glnx_prefix_error (error, "Updating %s for soft-reboot", OTCORE_RUN_BOOTED);
+                  
+                  // Clean up soft-reboot state - we're now fully booted into the target
+                  if (unlink ("/run/ostree/nextroot-deployment") == 0)
+                    g_print ("Cleaned up /run/ostree/nextroot-deployment\n");
+                  else
+                    g_print ("Failed to clean up /run/ostree/nextroot-deployment: %s\n", strerror(errno));
+                  
+                  // Also clear the soft_reboot_deployment_inode so future loads don't detect stale state
+                  self->soft_reboot_deployment_inode = 0;
+                  
+                  g_print ("Updated /run/ostree-booted for soft-reboot completion\n");
+                }
+            }
+        }
+      return TRUE;
+    }
   g_autofree char *failure_data = glnx_fd_readall_utf8 (failure_fd, NULL, cancellable, error);
   if (failure_data == NULL)
     return glnx_prefix_error (error, "Reading from %s", _OSTREE_FINALIZE_STAGED_FAILURE_PATH);
