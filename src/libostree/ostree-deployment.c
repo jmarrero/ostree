@@ -377,6 +377,7 @@ ostree_deployment_new (int index, const char *osname, const char *csum, int depl
   self->bootcsum = g_strdup (bootcsum);
   self->bootserial = bootserial;
   self->unlocked = OSTREE_DEPLOYMENT_UNLOCKED_NONE;
+  self->soft_reboot_ready = FALSE;
   return self;
 }
 
@@ -475,4 +476,19 @@ gboolean
 ostree_deployment_is_finalization_locked (OstreeDeployment *self)
 {
   return self->finalization_locked;
+}
+
+/**
+ * ostree_deployment_is_soft_reboot_ready:
+ * @self: Deployment
+ *
+ * Returns: `TRUE` if deployment is queued to be "finalized" at shutdown time, but requires
+ * additional action.
+ *
+ * Since: 2023.8
+ */
+gboolean
+ostree_deployment_is_soft_reboot_ready (OstreeDeployment *self)
+{
+  return self->soft_reboot_ready;
 }

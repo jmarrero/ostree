@@ -1315,6 +1315,26 @@ sysroot_load_from_bootloader_configs (OstreeSysroot *self, GCancellable *cancell
   return TRUE;
 }
 
+static gboolean
+load_soft_reboot_state (OstreeSysroot *sysroot, GError **error)
+{
+  sysroot->soft_reboot_deployment_inode = 0;
+
+  // Check if /run/nextroot exists (indicating a soft-reboot is prepared)
+  if (!g_file_test ("/run/nextroot", G_FILE_TEST_IS_DIR))
+    return TRUE;
+
+  // Follow symlinks to the deployment
+  struct stat stbuf;
+  if ((!stat ("/run/ostree/nextroot-deployment", &stbuf)) < 0)
+    {
+      if (errno == ENOENT)
+        return TRUE;
+    }
+  sysroot->soft_reboot_deployment_inode = stbuf.st_ino;
+  return TRUE;
+}
+
 /**
  * ostree_sysroot_load_if_changed:
  * @self: #OstreeSysroot
@@ -1358,6 +1378,9 @@ ostree_sysroot_load_if_changed (OstreeSysroot *self, gboolean *out_changed,
   g_clear_object (&self->staged_deployment);
   self->bootversion = -1;
   self->subbootversion = -1;
+
+  if (!load_soft_reboot_state (self, error))
+    return glnx_prefix_error (error, "Loading soft reboot state");
 
   if (!sysroot_load_from_bootloader_configs (self, cancellable, error))
     return FALSE;

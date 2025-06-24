@@ -33,4 +33,5 @@ global:
 LIBOSTREE_2025.3 {
 global:
   ostree_sysroot_deployment_prepare_next_root;
+  ostree_deployment_is_soft_reboot_ready;
 } LIBOSTREE_2025.2;

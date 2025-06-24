@@ -82,6 +82,8 @@ struct OstreeSysroot
   /* The device/inode for / and /etc, used to detect booted deployment */
   dev_t root_device;
   ino_t root_inode;
+  /* inode for soft reboot deployment tracking */
+  ino_t soft_reboot_deployment_inode;
 
   // The parsed data from /run/ostree
   GVariantDict *run_ostree_metadata;
