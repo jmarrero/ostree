@@ -745,13 +745,20 @@ main (int argc, char *argv[])
         err (EXIT_FAILURE, "failed to change /var to slave+shared mount");
     }
 
-  /* This can be used by other things to signal ostree is in use */
+  /* This can be used by other things to signal ostree is in use.
+   * During soft-reboot preparation, we skip creating this file to avoid
+   * confusing the sysroot about which deployment is currently booted.
+   * The file will be created during actual boot/finalization.
+   */
   {
     g_autoptr (GVariant) metadata = g_variant_ref_sink (g_variant_builder_end (&metadata_builder));
-    const guint8 *buf = g_variant_get_data (metadata) ?: (guint8 *)"";
-    if (!glnx_file_replace_contents_at (AT_FDCWD, OTCORE_RUN_BOOTED, buf,
-                                        g_variant_get_size (metadata), 0, NULL, &error))
-      errx (EXIT_FAILURE, "Writing %s: %s", OTCORE_RUN_BOOTED, error->message);
+    if (!opt_soft_reboot)
+      {
+        const guint8 *buf = g_variant_get_data (metadata) ?: (guint8 *)"";
+        if (!glnx_file_replace_contents_at (AT_FDCWD, OTCORE_RUN_BOOTED, buf,
+                                            g_variant_get_size (metadata), 0, NULL, &error))
+          errx (EXIT_FAILURE, "Writing %s: %s", OTCORE_RUN_BOOTED, error->message);
+      }
   }
 
   if (opt_soft_reboot)
