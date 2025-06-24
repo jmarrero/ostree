@@ -4099,10 +4099,30 @@ _ostree_sysroot_boot_complete (OstreeSysroot *self, GCancellable *cancellable, G
   if (!ot_openat_ignore_enoent (self->boot_fd, _OSTREE_FINALIZE_STAGED_FAILURE_PATH, &failure_fd,
                                 error))
     return FALSE;
-  // If we didn't find a failure log, then there's nothing to do right now.
-  // (Actually this unit shouldn't even be invoked, but we may do more in the future)
+  // If we didn't find a failure log, check for soft-reboot completion tasks
   if (failure_fd == -1)
-    return TRUE;
+    {
+      // Check if we just completed a soft-reboot and need to update /run/ostree-booted
+      if (g_file_test ("/run/ostree/nextroot-booted", G_FILE_TEST_EXISTS))
+        {
+          // We're completing a soft-reboot, simply move the nextroot-booted file to ostree-booted
+          if (rename ("/run/ostree/nextroot-booted", OTCORE_RUN_BOOTED) == 0)
+            {
+              g_print ("Updated /run/ostree-booted for soft-reboot completion\n");
+              
+              // Clean up soft-reboot state - we're now fully booted into the target
+              if (unlink ("/run/ostree/nextroot-deployment") == 0)
+                g_print ("Cleaned up /run/ostree/nextroot-deployment\n");
+              else if (errno != ENOENT)
+                g_print ("Failed to clean up /run/ostree/nextroot-deployment: %s\n", strerror(errno));
+            }
+          else
+            {
+              g_print ("Failed to move /run/ostree/nextroot-booted to %s: %s\n", OTCORE_RUN_BOOTED, strerror(errno));
+            }
+        }
+      return TRUE;
+    }
   g_autofree char *failure_data = glnx_fd_readall_utf8 (failure_fd, NULL, cancellable, error);
   if (failure_data == NULL)
     return glnx_prefix_error (error, "Reading from %s", _OSTREE_FINALIZE_STAGED_FAILURE_PATH);

@@ -43,31 +43,64 @@ static GOptionEntry options[]
         { NULL } };
 
 static gboolean
-deployment_is_prepared_for_soft_reboot (OstreeDeployment *deployment)
+deployment_is_prepared_for_soft_reboot (OstreeSysroot *sysroot, OstreeDeployment *deployment)
 {
-  // Check if /run/nextroot exists (indicating a soft-reboot is prepared)
+  // Check if /run/ostree/nextroot-booted exists (indicating a soft-reboot is prepared)
+  if (!g_file_test ("/run/ostree/nextroot-booted", G_FILE_TEST_EXISTS))
+    return FALSE;
+
+  // Also verify that /run/nextroot actually contains a deployment
   if (!g_file_test ("/run/nextroot", G_FILE_TEST_IS_DIR))
     return FALSE;
 
-  // Get the deployment info we're looking for
-  const char *deployment_csum = ostree_deployment_get_csum (deployment);
-  int deployment_serial = ostree_deployment_get_deployserial (deployment);
-  const char *deployment_osname = ostree_deployment_get_osname (deployment);
-
-  // Try to find this deployment under /run/nextroot/sysroot/ostree/deploy
-  g_autofree char *nextroot_deploy_path
-      = g_strdup_printf ("/run/nextroot/sysroot/ostree/deploy/%s/deploy", deployment_osname);
-
-  if (!g_file_test (nextroot_deploy_path, G_FILE_TEST_IS_DIR))
+  // Check if /run/nextroot has actual content (not just an empty directory)
+  if (!g_file_test ("/run/nextroot/sysroot", G_FILE_TEST_IS_DIR))
     return FALSE;
 
-  // Look for a directory matching our deployment
-  g_autofree char *target_deploy_name
-      = g_strdup_printf ("%s.%d", deployment_csum, deployment_serial);
-  g_autofree char *target_deploy_path
-      = g_build_filename (nextroot_deploy_path, target_deploy_name, NULL);
+  // Load the metadata from the nextroot-booted file
+  gchar *metadata_contents = NULL;
+  gsize metadata_length = 0;
+  g_autoptr(GError) local_error = NULL;
+  if (!g_file_get_contents ("/run/ostree/nextroot-booted", &metadata_contents, &metadata_length, &local_error))
+    {
+      g_debug ("Failed to read /run/ostree/nextroot-booted: %s", local_error->message);
+      return FALSE;
+    }
 
-  return g_file_test (target_deploy_path, G_FILE_TEST_IS_DIR);
+  g_autoptr(GBytes) metadata_bytes = g_bytes_new_take (metadata_contents, metadata_length);
+  g_autoptr(GVariant) metadata = g_variant_new_from_bytes (G_VARIANT_TYPE ("a{sv}"), 
+                                                           metadata_bytes, FALSE);
+  if (!metadata)
+    {
+      g_debug ("Failed to parse metadata from /run/ostree/nextroot-booted");
+      return FALSE;
+    }
+
+  // Get the backing device/inode from metadata
+  guint64 backing_dev, backing_ino;
+  g_autoptr(GVariant) backing_devino = g_variant_lookup_value (metadata, "backing-root-device-inode", G_VARIANT_TYPE ("(tt)"));
+  if (!backing_devino)
+    {
+      g_debug ("No backing-root-device-inode found in nextroot-booted metadata");
+      return FALSE;
+    }
+  
+  g_variant_get (backing_devino, "(tt)", &backing_dev, &backing_ino);
+
+  // Get the deployment's actual device/inode
+  g_autofree char *deployment_path = ostree_sysroot_get_deployment_dirpath (sysroot, deployment);
+  g_autofree char *sysroot_path = g_file_get_path (ostree_sysroot_get_path (sysroot));
+  g_autofree char *deployment_full_path = g_build_filename (sysroot_path, deployment_path, NULL);
+  
+  struct stat deployment_stat;
+  if (lstat (deployment_full_path, &deployment_stat) < 0)
+    {
+      g_debug ("Failed to stat deployment at %s", deployment_full_path);
+      return FALSE;
+    }
+
+  // Compare device/inode
+  return (deployment_stat.st_dev == backing_dev && deployment_stat.st_ino == backing_ino);
 }
 
 static gboolean
@@ -107,7 +140,7 @@ deployment_print_status (OstreeSysroot *sysroot, OstreeRepo *repo, OstreeDeploym
       = origin ? g_key_file_get_string (origin, "origin", "refspec", NULL) : NULL;
 
   g_autoptr (GString) deployment_status = g_string_new ("");
-  gboolean is_soft_reboot_prepared = deployment_is_prepared_for_soft_reboot (deployment);
+  gboolean is_soft_reboot_prepared = deployment_is_prepared_for_soft_reboot (sysroot, deployment);
 
   if (ostree_deployment_is_finalization_locked (deployment))
     g_string_append (deployment_status, " (finalization locked)");
