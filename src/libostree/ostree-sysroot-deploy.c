@@ -4358,6 +4358,18 @@ ostree_sysroot_deployment_prepare_next_root (OstreeSysroot *self, OstreeDeployme
   if (!g_spawn_check_exit_status (estatus, error))
     return FALSE;
 
+  // Create /run/ostree directory if it doesn't exist
+  if (g_mkdir_with_parents ("/run/ostree", 0755) != 0 && errno != EEXIST)
+    return glnx_throw_errno_prefix (error, "mkdir /run/ostree");
+
+  // Create symlink from /run/ostree/nextroot-deployment to the deployment directory
+  // Remove any existing symlink first
+  (void)unlink ("/run/ostree/nextroot-deployment");
+  
+  g_autofree char *sysroot_deployment_path = g_build_filename (gs_file_get_path_cached (self->path), deployment_path, NULL);
+  if (symlink (sysroot_deployment_path, "/run/ostree/nextroot-deployment") != 0)
+    return glnx_throw_errno_prefix (error, "Creating symlink /run/ostree/nextroot-deployment");
+
   sd_journal_print (LOG_INFO, "Set up soft reboot at /run/nextroot");
 
   return TRUE;

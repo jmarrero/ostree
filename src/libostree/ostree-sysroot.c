@@ -910,6 +910,21 @@ parse_deployment (OstreeSysroot *self, const char *boot_link, OstreeDeployment *
   if (!load_origin (self, ret_deployment, cancellable, error))
     return FALSE;
 
+  // Check if this deployment matches the soft reboot deployment inode
+  if (self->soft_reboot_deployment_inode != 0)
+    {
+      struct stat deployment_stbuf;
+      if (!glnx_fstat (deployment_dfd, &deployment_stbuf, error))
+        return FALSE;
+      
+      if (deployment_stbuf.st_ino == self->soft_reboot_deployment_inode)
+        {
+          ret_deployment->soft_reboot_ready = TRUE;
+          g_debug ("Deployment %s.%d marked as soft reboot ready (inode %lu)", 
+                   treecsum, deployserial, (unsigned long)deployment_stbuf.st_ino);
+        }
+    }
+
   ret_deployment->unlocked = OSTREE_DEPLOYMENT_UNLOCKED_NONE;
   g_autofree char *unlocked_development_path = _ostree_sysroot_get_runstate_path (
       ret_deployment, _OSTREE_SYSROOT_DEPLOYMENT_RUNSTATE_FLAG_DEVELOPMENT);
