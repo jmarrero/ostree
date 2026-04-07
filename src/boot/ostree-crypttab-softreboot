@@ -1,0 +1,70 @@
+#!/usr/bin/bash
+# ostree-crypttab-softreboot: Add x-initrd.attach to /etc/crypttab
+#
+# On ostree systems, LUKS devices backing /sysroot need x-initrd.attach
+# in their crypttab entry. Without it, systemd-cryptsetup-generator adds
+# Conflicts=umount.target to the cryptsetup service, which tears down the
+# LUKS device during soft-reboot and cascades to /sysroot unmount.
+#
+# On non-ostree systems, this is harmless because the kernel root mount
+# pins the LUKS device (cryptsetup detach fails with EBUSY). On ostree,
+# /sysroot is a regular mount that CAN be unmounted, so the cascade
+# actually tears everything down.
+#
+# See https://github.com/ostreedev/ostree/pull/3571
+
+set -euo pipefail
+
+CRYPTTAB=/etc/crypttab
+
+if [ ! -f "$CRYPTTAB" ]; then
+    echo "No crypttab found, nothing to do"
+    exit 0
+fi
+
+if grep -q x-initrd.attach "$CRYPTTAB"; then
+    echo "x-initrd.attach already present in crypttab"
+    exit 0
+fi
+
+echo "Adding x-initrd.attach to crypttab entries for ostree soft-reboot support"
+
+# Process each non-comment line in crypttab.
+# crypttab format: name device keyfile options
+# We need to add x-initrd.attach to the options field (4th field).
+tmpfile=$(mktemp)
+while IFS= read -r line; do
+    # Skip comments and empty lines
+    if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "$line" ]]; then
+        echo "$line" >> "$tmpfile"
+        continue
+    fi
+
+    # Check if the line already has x-initrd.attach
+    if [[ "$line" == *x-initrd.attach* ]]; then
+        echo "$line" >> "$tmpfile"
+        continue
+    fi
+
+    # Count fields
+    nfields=$(echo "$line" | awk '{print NF}')
+    if [ "$nfields" -ge 4 ]; then
+        # Append to the 4th field (options)
+        echo "$line" | awk '{$4=$4",x-initrd.attach"; print}' >> "$tmpfile"
+    else
+        # Append as a new field
+        echo "$line x-initrd.attach" >> "$tmpfile"
+    fi
+done < "$CRYPTTAB"
+
+# Replace crypttab atomically
+mv "$tmpfile" "$CRYPTTAB"
+chmod 600 "$CRYPTTAB"
+
+echo "Updated crypttab:"
+cat "$CRYPTTAB"
+
+# Reload systemd so generators re-run with updated crypttab
+systemctl daemon-reload
+
+echo "Reloaded systemd, cryptsetup units should now lack Conflicts=umount.target"

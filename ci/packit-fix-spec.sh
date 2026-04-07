@@ -15,3 +15,5 @@ version=$(git describe --always --tags --match 'v2???.*' | sed -e 's,-,\.,g' -e 
 sed -i "s,^Version:.*,Version: ${version}," "$spec"
 sed -i 's/^Patch/# Patch/g' "$spec"
 sed -i 's,%autorelease,1%{?dist},g' "$spec"
+# Add the LUKS soft-reboot helper script to the files list
+sed -i '/^%{_prefix}\/lib\/systemd\/system\/ostree\*\.\*/a %{_prefix}/lib/ostree/ostree-crypttab-softreboot' "$spec"
