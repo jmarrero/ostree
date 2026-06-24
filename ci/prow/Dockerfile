@@ -14,7 +14,7 @@ USER root
 # Copy binaries from the build
 COPY --from=builder /cosa /cosa
 # Merge them to the real root since we're used at compose time
-RUN rsync -rlv /cosa/component-install/ /
+RUN rsync -rlv /cosa/component-install/ / && ldconfig
 # Merge installed tests
 RUN rsync -rlv /cosa/component-tests/ /
 # Grab all of our ci scripts
